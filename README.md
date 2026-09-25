@@ -149,3 +149,7 @@ Execute the scripts in the following sequence. Ensure all paths inside the scrip
 
 ## ✍️ Author
 - Gilab Team 
+
+
+## Acknowledgements
+This project has received funding from the European Union’s Horizon 2020 research and innovation programme under grant agreements No. 776115, No. 101004112, No. 101059548 and No. 101086461.
