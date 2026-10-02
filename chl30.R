@@ -9,9 +9,16 @@ library(data.table)
 library('jsonlite') 
 
 # R session options
-options("timeout" = 600) 
+options("timeout" = 600)
 options("warn" = -1)
-# options(future.globals.maxSize= 6*1024^3) 
+# options(future.globals.maxSize= 6*1024^3)
+
+############# Configuration
+ROOT_DIR           <- "C:/Users/gilab/OPENEM"                                          # folder with one subfolder per area (signal/ + geometry/)
+CLASSIFICATION_CSV <- "C:/Users/gilab/OPENEM/field_boundaries_crop_classification.csv"
+FOLDERS            <- NULL      # NULL = all subfolders of ROOT_DIR, or e.g. c("PI")
+PERIOD_FROM        <- "2022-05-01"
+PERIOD_TO          <- "2022-07-31"
 
 
 ############# Signal data processing
@@ -74,14 +81,14 @@ processAllSignals <- function(rootFolderPath) {
         pol_filter <- pol %>% filter(CLM < 0.2)
         
         if(length(unique(pol_filter$dy)) >= 4) {
-          # Smooth NDVI and predict sum for May-July 2022 period
+          # Smooth NDVI and predict sum for the analysed period (PERIOD_FROM - PERIOD_TO)
           ss10_ndvi <- smooth.spline(pol_filter$dy, pol_filter$NDVI, df= min(10, nrow(pol_filter) - 1))
-          p365_ndvi = predict(ss10_ndvi,yday(as.Date("01/05/2022", "%d/%m/%y")) : yday(as.Date("31/07/2022", "%d/%m/%y")))
+          p365_ndvi = predict(ss10_ndvi, yday(as.Date(PERIOD_FROM)) : yday(as.Date(PERIOD_TO)))
           cum_ndvi = sum(p365_ndvi$y)
-          
-          # Smooth CHL and predict sum for May-July 2022 period
+
+          # Smooth CHL and predict sum for the analysed period (PERIOD_FROM - PERIOD_TO)
           ss10_chl <- smooth.spline(pol_filter$dy, pol_filter$CHL,  df= min(10, nrow(pol_filter) - 1))
-          p365_chl = predict(ss10_chl,yday(as.Date("01/05/2022", "%d/%m/%y")) : yday(as.Date("31/07/2022", "%d/%m/%y")))
+          p365_chl = predict(ss10_chl, yday(as.Date(PERIOD_FROM)) : yday(as.Date(PERIOD_TO)))
           cum_chl = sum(p365_chl$y)
         }else{
           cum_ndvi = NA
@@ -117,6 +124,8 @@ get_data <- function(var, agg_level, time_scale, from=NULL, to=NULL, time=NULL, 
   # if (is.null(time_scale)) {stop("time_scale parameter is missing")}
   if (is.null(time) & (is.null(from) | is.null(to))) {stop("time or from/to parameters are missing")}
   if (is.null(lat) | is.null(lon)) {stop("lat/lon parameters are missing")}
+  api_key <- Sys.getenv("DAILYMETEO_API_KEY")
+  if (api_key == "") {stop("DAILYMETEO_API_KEY environment variable is not set")}
   # Construct the URL for the dailymeteo.com API endpoint
   url <- "https://api.dailymeteo.com/meteo/v2/pq/"
   # Set query parameters
@@ -126,7 +135,7 @@ get_data <- function(var, agg_level, time_scale, from=NULL, to=NULL, time=NULL, 
     time_scale = time_scale,
     lat = lat,
     lon = lon,
-    api_key="jzyrpmazw6k0weg6ey9ww20j8")
+    api_key = api_key)
   if (is.null(time)) {
     query <- append(query, list(from=from, to=to))
   } else {
@@ -161,16 +170,16 @@ get_data <- function(var, agg_level, time_scale, from=NULL, to=NULL, time=NULL, 
   }
 }
 
-## Calculate GDD sum for a location (lat, lon) for May-July 2022.
+## Calculate GDD sum for a location (lat, lon) for the analysed period.
 calculate_gdd <- function(lat, lon) {
   # Get Tmin data
   tmin_data <- get_data(var = "tmin", agg_level = "agg", time_scale = "day",
-                        from = "2022-05-01", to = "2022-07-31", 
+                        from = PERIOD_FROM, to = PERIOD_TO,
                         time = NULL, lat = lat, lon = lon)
-  
+
   # Get Tmax data
   tmax_data <- get_data(var = "tmax", agg_level = "agg", time_scale = "day",
-                        from = "2022-05-01", to = "2022-07-31", 
+                        from = PERIOD_FROM, to = PERIOD_TO,
                         time = NULL, lat = lat, lon = lon)
   
   # Combine Tmin/Tmax, sort, calculate GDD
@@ -211,23 +220,16 @@ processAllGeometry <- function(rootFolderPath) {
     # List Parquet files in "geometry" folder
     geometryFiles <- list.files(geometryFolder, recursive = TRUE, full.names = TRUE, pattern = "\\.parquet$")
    
-    # Read first Parquet geometry file
-    geom_data <- arrow::read_parquet(geometryFiles[1])
-    # Extract CRS from WKT
-    geom_data$crs = str_extract(geom_data$pixelated_geometry, "(?<=SRID=)\\d+") %>% as.integer()
-    # Uklanjanje SRID prefiksa iz WKT stringa geometrije
-    geom_data$pixelated_geometry = str_remove(geom_data$pixelated_geometry, "^SRID=\\d+;")
-    # Inicijalizacija data.frame-a sa prvim fajlom
-    df = geom_data
-    
-    # Dodavanje podataka iz preostalih Parquet fajlova u isti data.frame
-    # Ovo spaja sve geometrije iz JEDNOG glavnog foldera
-    for (i in 2:length(geometryFiles)) {
-      geom_data <- arrow::read_parquet(geometryFiles[i])
+    # Ucitavanje svih Parquet fajlova sa geometrijom i spajanje u jedan data.frame
+    # Ovo spaja sve geometrije iz JEDNOG glavnog foldera (radi i kad postoji samo jedan fajl)
+    df <- bind_rows(lapply(geometryFiles, function(f) {
+      geom_data <- arrow::read_parquet(f)
+      # Extract CRS from WKT
       geom_data$crs = str_extract(geom_data$pixelated_geometry, "(?<=SRID=)\\d+") %>% as.integer()
+      # Uklanjanje SRID prefiksa iz WKT stringa geometrije
       geom_data$pixelated_geometry = str_remove(geom_data$pixelated_geometry, "^SRID=\\d+;")
-      df = rbind(df, geom_data)
-    }
+      geom_data
+    }))
     
     # Procesiranje geometrija za svaki jedinstveni CRS pronađen u podacima
     for (i in unique(df$crs) ){
@@ -265,15 +267,12 @@ calculate_gdd_parallel <- function(lat, lon) {
   cl <- makeCluster(n_cores)
   
   # Експортуј потребне функције и пакете на кластер
-  clusterExport(cl, c("calculate_gdd", "get_data", "lat", "lon"))
+  clusterExport(cl, c("calculate_gdd", "get_data", "lat", "lon", "PERIOD_FROM", "PERIOD_TO"))
   clusterEvalQ(cl, {
     library(jsonlite)
     library(dplyr)
   })
-  
-  # Подели податке на партиције
-  chunks <- split(1:length(lat), cut(1:length(lat), n_cores))
-  
+
   # Паралелно израчунавање
   results <- clusterMap(
     cl = cl,
@@ -296,24 +295,24 @@ calculate_gdd_parallel <- function(lat, lon) {
 #all = left_join(sig, geo, by = POLY_ID)
 
 
-csv_file_path = "C:/Users/gilab/OPENEM/field_boundaries_crop_classification.csv"
-
 # Učitavanje klasifikacije useva iz CSV fajla
-data_from_csv <- read_csv(csv_file_path, show_col_types = FALSE) %>%
+data_from_csv <- read_csv(CLASSIFICATION_CSV, show_col_types = FALSE) %>%
   mutate(
     field_boundary_id = as.integer(field_boundary_id),
     classification = as.character(classification)
   )
 
 
-rootFolderPath="C:/Users/gilab/OPENEM" 
+rootFolderPath = ROOT_DIR
 
 folders <- list.files(path = rootFolderPath, full.names = TRUE, recursive = FALSE, include.dirs = TRUE)
 folders <- folders[file.info(folders)$isdir]
-  
-# for (mainFolder in folders[30]) {
-mainFolder = "C:/Users/gilab/OPENEM/PI"
-    folder_name <- basename("C:/Users/gilab/OPENEM/PI")
+if (!is.null(FOLDERS)) folders <- folders[basename(folders) %in% FOLDERS]
+# Preskacemo foldere bez "signal" podfoldera (npr. results/)
+folders <- folders[sapply(folders, function(f) any(grepl("signal$", list.dirs(f))))]
+
+for (mainFolder in folders) {
+    folder_name <- basename(mainFolder)
     message("Obradjuje se folder: ", folder_name)
     
     sig = processAllSignals(rootFolderPath = mainFolder)
@@ -334,5 +333,5 @@ mainFolder = "C:/Users/gilab/OPENEM/PI"
     csv_path <- file.path(rootFolderPath, paste0(folder_name, ".csv"))
     write.csv(all, csv_path, row.names = FALSE)
     
-    message(paste("Folder", folder_name, "završen. CSV sačuvan u:", csv_path))    
-  # }
+    message(paste("Folder", folder_name, "završen. CSV sačuvan u:", csv_path))
+}
