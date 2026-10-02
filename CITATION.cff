@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: "If you use this software or its results, please cite the dataset below."
+title: "Field Boundaries and Crop Classification Processing"
+type: software
+authors:
+  - name: "Gilab Ltd"
+repository-code: "https://github.com/Sinergise-Crop-classification/Processing"
+license: MIT
+keywords:
+  - crop performance
+  - NDVI
+  - growing degree days
+  - Sentinel-2
+  - OpenEarthMonitor
+preferred-citation:
+  type: data
+  title: "Field-based Crop Performance Indicators for Europe (May–July 2022)"
+  authors:
+    - name: "Gilab Ltd"
+  year: 2025
+  publisher:
+    name: Zenodo
+  doi: "10.5281/zenodo.15656419"
+  url: "https://doi.org/10.5281/zenodo.15656419"
+  license: CC-BY-4.0

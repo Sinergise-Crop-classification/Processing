@@ -1,0 +1,19 @@
+# Data (inputs and outputs are large; results are published on Zenodo)
+*.gpkg
+*.parquet
+*.tif
+*.tiff
+*.csv
+*.zip
+countries/
+
+# R
+.Rhistory
+.RData
+.Rproj.user/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
