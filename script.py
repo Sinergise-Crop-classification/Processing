@@ -2,19 +2,29 @@ import os
 import geopandas as gpd
 import pandas as pd
 
-PARQUET_DATA = gpd.read_parquet("C:\\Users\\srpp0\\Projects\\SInergise-klasifikacija\\field_boundaries.parquet")
-GDF_ALL_POINTS = gpd.read_file("C:\\Users\\srpp0\\Projects\\SInergise-klasifikacija\\all.gpkg")
-DF_LABELS = pd.read_csv("C:\\Users\\srpp0\\Projects\\SInergise-klasifikacija\\field_boundaries_crop_classification.csv")
-GADM_DATA = "C:\\Users\\srpp0\\Projects\\SInergise-klasifikacija\\europe.gpkg"
+# Konfiguracija
+DATA_DIR = "C:\\Users\\srpp0\\Projects\\SInergise-klasifikacija"
+OUTPUT_DIR = os.path.join(DATA_DIR, "countries")
+# None = sve zemlje iz GADM fajla, ili npr. ["Serbia"] za probu na jednoj zemlji
+COUNTRIES = None
+
+PARQUET_DATA = gpd.read_parquet(os.path.join(DATA_DIR, "field_boundaries.parquet"))
+GDF_ALL_POINTS = gpd.read_file(os.path.join(DATA_DIR, "all.gpkg"))
+DF_LABELS = pd.read_csv(os.path.join(DATA_DIR, "field_boundaries_crop_classification.csv"))
+GADM_DATA = os.path.join(DATA_DIR, "europe.gpkg")
 
 gadm_gdf = gpd.read_file(GADM_DATA)
 
 country_col = 'COUNTRY'
-output_dir = "C:\\Users\\srpp0\\Projects\\SInergise-klasifikacija\\countries"
+output_dir = OUTPUT_DIR
 os.makedirs(output_dir, exist_ok=True)
 
+countries = gadm_gdf[country_col].unique()
+if COUNTRIES is not None:
+    countries = [c for c in countries if c in COUNTRIES]
+
 # Ceo workflow radimo za svaku zemlju posebno
-for country in gadm_gdf[country_col].unique():
+for country in countries:
     # Uzimamo podatke za zemlju i pravimo folder i cuvamo u GPKG geometriju
     country_gdf = gadm_gdf[gadm_gdf[country_col] == country]
     country_folder = os.path.join(output_dir, country.lower().replace(' ', '_'))
@@ -64,7 +74,6 @@ for country in gadm_gdf[country_col].unique():
     print(f"Points for {country} has been saved in {gdf_filtered_points_path}")
     print(f"Finished processing {country}")
     print("-" * 50)
-    break # Ovo je samo primer za jednu zemlju, da ne bi dugo trajalo
 
 
  

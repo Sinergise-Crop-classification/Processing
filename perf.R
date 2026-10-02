@@ -1,10 +1,9 @@
 # Učitavanje potrebnih biblioteka
 library(sf)
 library(dplyr)
-library(ggplot2)
-library(viridisLite)
 
-# Definisanje radnog direktorijuma
+############# Configuration
+# Folder sa podfolderom za svaku drzavu (izlaz iz script.py)
 root <- "C:/Users/Sole/Desktop/0_processing"
 
 # Dohvatanje svih neposrednih podfoldera (svaki folder predstavlja jednu državu)
